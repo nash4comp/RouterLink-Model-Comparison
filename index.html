@@ -1,0 +1,556 @@
+<!doctype html>
+<!-- RouterLink 모델 비교 웹앱: /api/v1/models/group 데이터로 Input/Output 모달리티별 가격 비교(최대 3개), 정렬(asc/desc), 선택 모델의 연동 정보(Base URL/Model/포맷) 표시 -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RouterLink Model Comparison</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --border:#e3e6ea; --text:#1a1d21; --muted:#697280;
+    --accent:#4b5bd6; --accent-weak:#e8ebfc; --row-hover:#f2f4f8; --sel:#e6efff; --code:#0f1115; --code-text:#e6e6e6;
+    --group:#eef0f4; --scroll:#b8bfc9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1013; --panel:#171a1f; --border:#2a2f38; --text:#e7eaee; --muted:#8b95a3;
+      --accent:#8b9bff; --accent-weak:#232a42; --row-hover:#1d2128; --sel:#1c2740; --code:#0a0c0f; --code-text:#e6e6e6;
+      --group:#1e222a; --scroll:#3a414c;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+  header{padding:18px 20px;border-bottom:1px solid var(--border);background:var(--panel)}
+  h1{margin:0 0 4px;font-size:18px}
+  .sub{color:var(--muted);font-size:12.5px}
+  .wrap{padding:14px 16px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11.5px;color:var(--muted);font-weight:600}
+  input[type=text],input[type=password]{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 9px;color:var(--text);font-size:13px;min-width:230px}
+  input.small{min-width:160px}
+  button{cursor:pointer;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:7px;padding:7px 12px;font-size:13px;font-weight:600}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.link{background:none;border:none;color:var(--accent);padding:4px 6px}
+  .status{font-size:12.5px;color:var(--muted);margin:4px 2px 8px;min-height:16px}
+  .status.err{color:#d64545}
+  .hint{font-size:12px;color:var(--muted);margin:0 2px 10px}
+  .hint b{color:var(--text)}
+  details{margin-bottom:12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:6px 12px}
+  details summary{cursor:pointer;font-weight:600;padding:6px 0}
+  textarea{width:100%;min-height:120px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:ui-monospace,Consolas,monospace;font-size:12px;padding:8px}
+
+  .tbl-scroll-top{overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:3px;scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+  .tbl-scroll-top>div{height:1px}
+  .tbl-scroll-top::-webkit-scrollbar{height:12px}
+  .tbl-scroll-top::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:3px solid var(--bg)}
+  .tbl-scroll-top::-webkit-scrollbar-track{background:transparent}
+  .tablewrap{overflow:auto;max-height:72vh;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+  /* always-visible, obvious scrollbars */
+  .tablewrap{scrollbar-width:auto;scrollbar-color:var(--scroll) transparent}
+  .tablewrap::-webkit-scrollbar{height:14px;width:14px}
+  .tablewrap::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:7px;border:3px solid var(--panel)}
+  .tablewrap::-webkit-scrollbar-track{background:transparent}
+  table{border-collapse:separate;border-spacing:0;white-space:nowrap}
+  th,td{padding:5px 9px;border-bottom:1px solid var(--border);text-align:left}
+  thead th{position:sticky;background:var(--panel);z-index:2}
+  thead tr:first-child th{top:0}
+  thead tr:last-child th{top:29px;font-size:12px;color:var(--muted);vertical-align:bottom}
+  thead tr:last-child th::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--border)}
+  /* frozen left columns (checkbox + Model) — main table only */
+  #tbl th:nth-child(1),#tbl td:nth-child(1){position:sticky;left:0;z-index:1;background:var(--panel);width:32px;min-width:32px;max-width:32px;padding-left:8px;padding-right:6px;text-align:center}
+  #tbl th:nth-child(2),#tbl td:nth-child(2){position:sticky;left:32px;z-index:1;background:var(--panel);border-right:1px solid var(--border)}
+  #tbl thead th:nth-child(1),#tbl thead th:nth-child(2){z-index:5}
+  #tbl tbody tr:hover td:nth-child(1),#tbl tbody tr:hover td:nth-child(2){background:var(--row-hover)}
+  #tbl tbody tr.sel td:nth-child(1),#tbl tbody tr.sel td:nth-child(2){background:var(--sel)}
+  th .lbl{white-space:nowrap}
+  th .unit{display:block;color:var(--muted);font-weight:400;font-size:10px;line-height:1.15;text-align:inherit}
+  th.ghead{background:var(--panel)}
+  th.group{background:var(--group);text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+  th.group button.grp{width:100%;background:none;border:none;color:var(--text);font-weight:700;font-size:12.5px;padding:6px 4px;cursor:pointer}
+  th.group button.grp:hover{color:var(--accent)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  th.sortable{cursor:pointer;user-select:none}
+  th.sortable:hover{background:var(--row-hover);color:var(--text)}
+  th.sortable.active{color:var(--accent);background:var(--accent-weak)}
+  th .ind{margin-left:5px;font-size:10px;opacity:.35}
+  th.sortable.active .ind{opacity:1}
+  #tbl tbody tr{cursor:pointer}
+  tbody tr:hover{background:var(--row-hover)}
+  tbody tr.sel{background:var(--sel)}
+  .vendor{color:var(--muted);font-size:12px}
+  .mname{display:block;white-space:nowrap}
+  .msub{display:block;white-space:nowrap;color:var(--muted);font-size:11px;line-height:1.1}
+  .tiered{color:#c98a00;cursor:help}
+  .inputcol{border-left:1px solid var(--border)}
+  .outputstart{border-left:1px solid var(--border)}
+
+  .count{font-size:12px;color:var(--muted);margin:10px 2px}
+  .layout{display:flex;gap:16px;align-items:flex-start}
+  .left{flex:1 1 auto;min-width:0}
+  .splitter{flex:0 0 8px;cursor:col-resize;background:var(--border);border-radius:4px;position:sticky;top:12px;height:calc(100vh - 24px)}
+  .splitter:hover,.splitter.drag{background:var(--accent)}
+  .cmp{flex:0 0 520px;width:520px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+  .cmp h2{font-size:14px;margin:0 0 10px}
+  .cmp-empty{color:var(--muted);font-size:12.5px;line-height:1.5}
+  .coltoggles{display:flex;gap:12px;align-items:center;padding-top:6px;font-size:12.5px}
+  .coltoggles label{display:flex;align-items:center;gap:4px;font-weight:400;color:var(--text);cursor:pointer}
+  @media(max-width:900px){ .layout{flex-direction:column} .cmp{position:static!important;flex:none!important;width:auto!important;max-height:none} .splitter{display:none} }
+  .cmp-scroll-top{overflow-x:auto;overflow-y:hidden;height:14px;border:1px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;background:var(--panel)}
+  .cmp-scroll-top>div{height:1px}
+  .cmp-grid{overflow:auto;border:1px solid var(--border);border-radius:0 0 10px 10px;background:var(--panel)}
+  .cmp-scroll-top::-webkit-scrollbar,.cmp-grid::-webkit-scrollbar{height:12px;width:12px}
+  .cmp-scroll-top::-webkit-scrollbar-thumb,.cmp-grid::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:3px solid var(--panel)}
+  .cmp-scroll-top,.cmp-grid{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+  .cmp-grid table{white-space:normal}
+  .cmp-grid th:first-child,.cmp-grid td:first-child{position:sticky;left:0;background:var(--panel);font-weight:600;color:var(--muted);min-width:150px}
+  .info-head{margin-top:14px;font-size:13px}
+  table.info{border-collapse:collapse;margin:4px 0 12px}
+  table.info th,table.info td{border:none;padding:4px 0;vertical-align:top;position:static;background:transparent}
+  table.info th{color:var(--muted);font-weight:600;text-align:left;white-space:nowrap;padding-right:16px}
+  code.cc{background:var(--code);color:var(--code-text);padding:2px 6px;border-radius:5px;font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all}
+  code.cc + button.link{margin-left:6px}
+  .muted{color:var(--muted)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  .clearchk{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:0}
+  .clearchk:hover{color:var(--accent)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--panel);padding:9px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.28);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:100}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #tip{position:fixed;z-index:1000;pointer-events:none;background:var(--code);color:var(--code-text);padding:7px 10px;border-radius:6px;font-size:12px;white-space:pre;box-shadow:0 6px 18px rgba(0,0,0,.32);opacity:0;transition:opacity .12s;max-width:360px}
+  #tip.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>RouterLink Model Comparison</h1>
+  <div class="sub">Compare models by context length, max output, and per-modality Input/Output pricing (up to 3), sort any column, and get the integration details (base URL, model, API format) for any selected model.</div>
+</header>
+
+<div class="wrap">
+  <div class="controls">
+    <div class="field">
+      <label>API Base URL</label>
+      <input type="text" id="baseUrl" value="https://router-link.world3.ai/api" />
+    </div>
+    <button class="primary" id="loadBtn">Load models</button>
+    <div class="field">
+      <label>Search</label>
+      <input type="text" id="search" placeholder="model / vendor / provider" class="small" />
+    </div>
+    <div class="field">
+      <label>Columns</label>
+      <div class="coltoggles">
+        <label><input type="checkbox" id="colVendor" checked> Vendor</label>
+        <label><input type="checkbox" id="colProvider" checked> Provider</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="hint">Tip: click any column header to sort — <b>▲ ascending</b>, <b>▼ descending</b>. Use the <b>Input</b> / <b>Output</b> group headers to expand or collapse per-modality pricing. Select up to 3 rows to compare. A <b>*</b> next to a price means tiered pricing — hover it to see all tiers.</div>
+
+  <div class="layout">
+    <div class="left">
+      <div class="tbl-scroll-top" id="tblScrollTop"><div></div></div>
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="count" id="count"></div>
+    </div>
+    <div class="splitter" id="splitter" title="Drag to resize"></div>
+    <aside class="cmp" id="cmp"></aside>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* Input/Output modality layout — always shown (— when no price for that modality) */
+const GROUPS = {
+  input:  { label:"Input",  mods:[
+    {label:"Text",pk:"input"}, {label:"Image",pk:"input_image"}, {label:"Audio",pk:"input_audio"},
+    {label:"Video",pk:"input_video"}, {label:"File",pk:"input_file"} ] },
+  output: { label:"Output", mods:[
+    {label:"Text",pk:"output"}, {label:"Image",pk:"output_image"}, {label:"Audio",pk:"output_audio"},
+    {label:"Video",pk:"output_video"}, {label:"File",pk:"output_file"} ] }
+};
+const PK_LABEL = {
+  input:"Input Text", output:"Output Text", input_image:"Input Image", input_audio:"Input Audio",
+  input_video:"Input Video", input_file:"Input File", output_image:"Output Image", output_audio:"Output Audio",
+  output_video:"Output Video", output_file:"Output File", input_image_cache:"Input Image Cache",
+  input_audio_cache:"Input Audio Cache", cache_read:"Cache Read", cache_write:"Cache Write",
+  google_search_request:"Google Search Request"
+};
+
+const $ = (id)=>document.getElementById(id);
+let rows = [];
+let sort = { col:"total_context", dir:"desc" };
+let selected = [];
+let collapsed = { input:true, output:true };   // default collapsed
+let cols = { vendor:true, provider:true };      // column visibility
+let lastCount = 0;                              // visible variant count (for drag refresh)
+
+function setStatus(m,err){ const s=$("status"); s.textContent=m||""; s.className="status"+(err?" err":""); }
+
+/* ---------- loading ---------- */
+async function loadFromApi(){
+  const base=$("baseUrl").value.trim().replace(/\/$/,"");
+  const url=base+"/v1/models/group";
+  setStatus("Loading… "+url);
+  try{
+    const res=await fetch(url);
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    ingest(await res.json());
+    setStatus("Loaded — "+rows.length+" variants.");
+  }catch(e){
+    setStatus("Failed to load: "+e.message,true);
+  }
+}
+function ingest(json){
+  rows=[];
+  for(const [displayName,stds] of Object.entries(json||{})){
+    if(!stds||typeof stds!=="object") continue;
+    for(const [standard,provs] of Object.entries(stds)){
+      if(!provs||typeof provs!=="object") continue;
+      for(const [provider,vars] of Object.entries(provs)){
+        if(!Array.isArray(vars)) continue;
+        for(const v of vars){
+          let dep=false;
+          try{ const m=typeof v.metadata==="string"?JSON.parse(v.metadata):(v.metadata||{}); dep=!!(m&&m.deprecated===true); }catch(e){}
+          if(dep) continue;   // skip deprecated models
+          const prices={};
+          for(const [t,tiers] of Object.entries(v.pricing||{})){
+            if(!Array.isArray(tiers)||!tiers.length) continue;
+            prices[t]={ usd:numOrNull(tiers[0].price_usd), wai:numOrNull(tiers[0].price_wai_credit), tiered:tiers.length>1, tiers:tiers };
+          }
+          rows.push({
+            key:(v.model_id!=null?v.model_id:"")+"|"+(v.model_name||displayName+"|"+provider),
+            displayName:v.display_name||displayName, vendor:v.vendor||"", provider:v.provider||provider,
+            standard:v.model_standard||standard, modelString:v.model_name||"",
+            wireFormat:v.wire_format||"", canonical:v.canonical_name||"",
+            endpoint:(v.endpoint||$("baseUrl").value.trim()).replace(/\/$/,""),
+            total_context:numOrNull(v.total_context), max_output:numOrNull(v.max_output), prices
+          });
+        }
+      }
+    }
+  }
+  selected=[]; render();
+}
+function numOrNull(x){ if(x==null||x==="") return null; const n=Number(x); return isNaN(n)?null:n; }
+
+/* ---------- format ---------- */
+function fmtInt(n){ return n==null?"—":n.toLocaleString("en-US"); }
+function fmtUsd(n){ if(n==null) return "—"; const d=n<1?4:2; return "$"+n.toLocaleString("en-US",{maximumFractionDigits:d}); }
+function tierTip(p){
+  if(!p||!p.tiers||p.tiers.length<2) return "Tiered pricing — first tier shown.";
+  const lines=p.tiers.map(t=>{
+    const lo=numOrNull(t.token_min)||0, hi=numOrNull(t.token_max);
+    const range=(hi==null||hi===0)?(fmtInt(lo)+"+ tokens"):(fmtInt(lo)+"–"+fmtInt(hi)+" tokens");
+    return "  "+range+": "+fmtUsd(numOrNull(t.price_usd))+"/1M";
+  });
+  return "Tiered pricing — the rate depends on token volume:\n"+lines.join("\n");
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function modelHtml(name){ const m=String(name||"").match(/^(.*?)\s*(\([^)]*\))\s*$/); return m ? '<span class="mname">'+esc(m[1])+'</span><span class="msub">'+esc(m[2])+'</span>' : '<span class="mname">'+esc(name)+'</span>'; }
+function toast(msg){ let t=document.getElementById("toast"); if(!t){ t=document.createElement("div"); t.id="toast"; t.className="toast"; document.body.appendChild(t); } t.textContent=msg; t.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"),2200); }
+function pkLabel(pk){ return PK_LABEL[pk]||pk.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
+
+/* ---------- sort ---------- */
+function sortValue(r,col){
+  if(col==="total_context") return r.total_context;
+  if(col==="max_output") return r.max_output;
+  if(col.startsWith("price:")){ const p=r.prices[col.slice(6)]; return p?p.usd:null; }
+  if(col==="displayName") return r.displayName.toLowerCase();
+  if(col==="vendor") return r.vendor.toLowerCase();
+  if(col==="provider") return r.provider.toLowerCase();
+  return null;
+}
+function applySort(list){
+  const {col,dir}=sort, mul=dir==="asc"?1:-1;
+  return [...list].sort((a,b)=>{
+    const va=sortValue(a,col), vb=sortValue(b,col);
+    if(va==null&&vb==null) return 0; if(va==null) return 1; if(vb==null) return -1;
+    if(typeof va==="string") return va<vb?-1*mul:va>vb?1*mul:0;
+    return (va-vb)*mul;
+  });
+}
+function setSort(col){
+  if(sort.col===col) sort.dir=sort.dir==="asc"?"desc":"asc";
+  else { sort.col=col; sort.dir=(col==="displayName"||col==="vendor"||col==="provider")?"asc":"desc"; }
+  render();
+}
+
+/* ---------- header builders ---------- */
+function ind(col){ return sort.col===col ? (sort.dir==="asc"?"▲":"▼") : "⇅"; }
+function thText(col,label){ const a=sort.col===col?" active":""; return '<th class="sortable'+a+'" data-col="'+col+'"><span class="lbl">'+label+'<span class="ind">'+ind(col)+'</span></span></th>'; }
+function thNum(col,label,unit,cls){ const a=sort.col===col?" active":""; return '<th class="sortable num'+a+(cls?" "+cls:"")+'" data-col="'+col+'"><span class="lbl">'+label+'<span class="ind">'+ind(col)+'</span></span>'+(unit?'<span class="unit">'+unit+'</span>':'')+'</th>'; }
+
+/* ---------- render ---------- */
+function filteredRows(){
+  const q=$("search").value.trim().toLowerCase();
+  let list=rows;
+  if(q) list=rows.filter(r=>(r.displayName+" "+r.vendor+" "+r.provider+" "+r.modelString).toLowerCase().includes(q));
+  return applySort(list);
+}
+function inLeaves(){ return collapsed.input?1:GROUPS.input.mods.length; }
+function outLeaves(){ return collapsed.output?1:GROUPS.output.mods.length; }
+
+function render(){
+  const list=filteredRows();
+  lastCount=list.length;
+
+  // header row 1 (groups)
+  const metaRest=2+(cols.vendor?1:0)+(cols.provider?1:0);
+  let r1='<tr>';
+  r1+='<th class="ghead"></th>';             // checkbox (frozen)
+  r1+='<th class="ghead"></th>';             // Model (frozen)
+  r1+='<th class="ghead" colspan="'+metaRest+'"></th>'; // Vendor / Provider / Context / Max Output
+  r1+='<th class="group inputcol" colspan="'+inLeaves()+'"><button class="grp" data-grp="input">Input '+(collapsed.input?"▸":"▾")+'</button></th>';
+  r1+='<th class="group" colspan="'+outLeaves()+'"><button class="grp" data-grp="output">Output '+(collapsed.output?"▸":"▾")+'</button></th>';
+  r1+='</tr>';
+
+  // header row 2 (leaves)
+  let r2='<tr>';
+  r2+='<th class="chkhead">'+(selected.length?'<button class="clearchk" id="clearChk" title="Uncheck all">✕</button>':'')+'</th>';
+  r2+=thText("displayName","Model");
+  if(cols.vendor) r2+=thText("vendor","Vendor");
+  if(cols.provider) r2+=thText("provider","Provider");
+  r2+=thNum("total_context","Context Length","tokens");
+  r2+=thNum("max_output","Max Output","tokens");
+  if(collapsed.input) r2+=thNum("price:input","Text","$/1M","inputcol");
+  else GROUPS.input.mods.forEach((m,i)=>r2+=thNum("price:"+m.pk,m.label,"$/1M",i===0?"inputcol":""));
+  if(collapsed.output) r2+=thNum("price:output","Text","$/1M","outputstart");
+  else GROUPS.output.mods.forEach((m,i)=>r2+=thNum("price:"+m.pk,m.label,"$/1M",i===0?"outputstart":""));
+  r2+='</tr>';
+  $("thead").innerHTML=r1+r2;
+
+  // body
+  if(!list.length){ $("tbody").innerHTML='<tr><td colspan="99"><div class="empty">No data. Click “Load models” or paste JSON.</div></td></tr>'; }
+  else{
+    let html="";
+    for(const r of list){
+      const isSel=selected.includes(r.key);
+      html+='<tr class="'+(isSel?"sel":"")+'">';
+      html+='<td><input type="checkbox" data-key="'+r.key+'" '+(isSel?"checked":"")+'></td>';
+      html+="<td>"+modelHtml(r.displayName)+"</td>";
+      if(cols.vendor) html+='<td class="vendor">'+esc(r.vendor||"—")+"</td>";
+      if(cols.provider) html+='<td class="vendor">'+esc(r.provider||"—")+"</td>";
+      html+='<td class="num">'+fmtInt(r.total_context)+"</td>";
+      html+='<td class="num">'+fmtInt(r.max_output)+"</td>";
+      if(collapsed.input) html+=priceTd(r,"input","inputcol");
+      else GROUPS.input.mods.forEach((m,i)=>html+=priceTd(r,m.pk,i===0?"inputcol":""));
+      if(collapsed.output) html+=priceTd(r,"output","outputstart");
+      else GROUPS.output.mods.forEach((m,i)=>html+=priceTd(r,m.pk,i===0?"outputstart":""));
+      html+='</tr>';
+    }
+    $("tbody").innerHTML=html;
+  }
+  $("count").textContent=list.length+" variants"+(selected.length?(" · "+selected.length+"/3 selected"):"");
+  renderCompare();
+  updateTblScroll();
+}
+function priceTd(r,pk,cls){
+  const p=r.prices[pk];
+  return '<td class="num'+(cls?" "+cls:"")+'">'+(p?fmtUsd(p.usd)+(p.tiered?' <span class="tiered" data-tip="'+esc(tierTip(p))+'">*</span>':""):"—")+"</td>";
+}
+
+/* ---------- compare panel ---------- */
+function renderCompare(){
+  const cmp=$("cmp");
+  if(!selected.length){ cmp.innerHTML='<div class="cmp-empty">Select up to 3 models (checkboxes on the left) to compare them and get integration details.</div>'; return; }
+  const chosen=selected.map(k=>rows.find(r=>r.key===k)).filter(Boolean);
+  const pkSet=new Set(); chosen.forEach(c=>Object.keys(c.prices).forEach(k=>pkSet.add(k)));
+  const orderedPk=[...Object.values(GROUPS).flatMap(g=>g.mods.map(m=>m.pk)),
+    "cache_read","cache_write","input_image_cache","input_audio_cache","google_search_request"]
+    .filter(pk=>pkSet.has(pk));
+  const extras=[...pkSet].filter(pk=>!orderedPk.includes(pk)); orderedPk.push(...extras);
+
+  const row=(l,vals)=>{ let s="<tr><th>"+esc(l)+"</th>"; vals.forEach(v=>s+="<td>"+v+"</td>"); return s+"</tr>"; };
+  let h='<h2>Comparison ('+chosen.length+'/3) <button class="link" id="clearSel">Uncheck all</button></h2>';
+  h+='<div class="cmp-scroll-top"><div></div></div><div class="cmp-grid"><table><tbody>';
+  h+=row("Model",chosen.map(c=>esc(c.displayName)));
+  h+=row("Vendor",chosen.map(c=>esc(c.vendor||"—")));
+  h+=row("Provider",chosen.map(c=>esc(c.provider||"—")));
+  h+=row("Standard",chosen.map(c=>esc(c.standard||"—")));
+  h+=row("Model string",chosen.map(c=>'<code style="font-size:11px">'+esc(c.modelString||"—")+"</code>"));
+  h+=row("Context Length",chosen.map(c=>fmtInt(c.total_context)));
+  h+=row("Max Output",chosen.map(c=>fmtInt(c.max_output)));
+  for(const pk of orderedPk){
+    h+=row(pkLabel(pk)+" ($/1M)",chosen.map(c=>{const p=c.prices[pk];return p?fmtUsd(p.usd)+(p.tiered?' <span class="tiered" data-tip="'+esc(tierTip(p))+'">*</span>':""):"—";}));
+    h+=row(pkLabel(pk)+" ($WAI/1M)",chosen.map(c=>{const p=c.prices[pk];return p&&p.wai!=null?fmtInt(p.wai):"—";}));
+  }
+  h+="</tbody></table></div>";
+  h+=integrationSection(chosen);
+  cmp.innerHTML=h;
+  cmp.querySelectorAll("[data-copy]").forEach(b=>b.addEventListener("click",()=>copy(b)));
+  const cs=cmp.querySelector("#clearSel"); if(cs) cs.addEventListener("click",()=>{ selected=[]; render(); });
+  syncCmpScroll(cmp);
+}
+
+/* ---------- integration info ---------- */
+function integ(r){
+  const root=(r.endpoint||"").replace(/\/+$/,"").replace(/\/v1(\/messages)?$/,""); // strip any existing /v1 or /v1/messages
+  if(r.standard==="Anthropic") return {format:"Anthropic Messages API",base:root,chat:root+"/v1/messages"};
+  if(r.standard==="Google") return {format:"Google Gemini API",base:root,chat:r.endpoint||root};
+  return {format:"OpenAI Chat Completions (OpenAI-compatible)",base:root+"/v1",chat:root+"/v1/chat/completions"};
+}
+function codeCopy(t){ return '<code class="cc">'+esc(t)+'</code><button class="link" data-copy="'+encodeURIComponent(t)+'">Copy</button>'; }
+function fieldDefs(chosen){
+  const defs=[
+    {k:"Format",code:false,get:r=>integ(r).format},
+    {k:"Base URL",code:true,get:r=>integ(r).base},
+    {k:"Chat endpoint",code:true,get:r=>integ(r).chat},
+    {k:"Model",code:true,get:r=>r.modelString||"—"},
+    {k:"Auth header",code:true,get:()=>"Authorization: Bearer YOUR_API_KEY"}
+  ];
+  if(chosen.some(r=>r.wireFormat)) defs.push({k:"Wire format",code:false,get:r=>r.wireFormat||"—"});
+  if(chosen.some(r=>r.canonical)) defs.push({k:"Canonical name",code:true,get:r=>r.canonical||"—"});
+  return defs;
+}
+function infoTable(defs,r){
+  let s='<table class="info"><tbody>';
+  for(const f of defs){ const v=f.get(r); s+='<tr><th>'+f.k+'</th><td>'+(f.code?codeCopy(v):esc(v))+'</td></tr>'; }
+  return s+'</tbody></table>';
+}
+function integrationSection(chosen){
+  const defs=fieldDefs(chosen);
+  let h='<h2>Integration</h2>';
+  if(chosen.length===1){
+    h+='<div class="info-head"><strong>'+esc(chosen[0].displayName)+'</strong></div>';
+    return h+infoTable(defs,chosen[0]);
+  }
+  const common=[],diff=[];
+  for(const f of defs){ const vals=chosen.map(f.get); (vals.every(v=>v===vals[0])?common:diff).push(f); }
+  if(common.length){
+    h+='<div class="info-head"><strong>Common</strong> <span class="muted" style="font-weight:400">· same for all selected</span></div>';
+    h+=infoTable(common,chosen[0]);
+  }
+  if(diff.length){
+    for(const r of chosen){
+      h+='<div class="info-head"><strong>'+esc(r.displayName)+'</strong></div>';
+      h+=infoTable(diff,r);
+    }
+  }
+  return h;
+}
+function syncCmpScroll(cmp){
+  const top=cmp.querySelector(".cmp-scroll-top"), grid=cmp.querySelector(".cmp-grid");
+  if(!top||!grid) return;
+  if(grid.scrollWidth<=grid.clientWidth+1){ top.style.display="none"; return; }
+  top.style.display="block";
+  top.firstElementChild.style.width=grid.scrollWidth+"px";
+  let lock=false;
+  top.addEventListener("scroll",()=>{ if(lock)return; lock=true; grid.scrollLeft=top.scrollLeft; lock=false; });
+  grid.addEventListener("scroll",()=>{ if(lock)return; lock=true; top.scrollLeft=grid.scrollLeft; lock=false; });
+}
+function copy(btn){ navigator.clipboard.writeText(decodeURIComponent(btn.getAttribute("data-copy"))).then(()=>{ const o=btn.textContent; btn.textContent="Copied"; setTimeout(()=>btn.textContent=o,1200); }); }
+
+/* ---------- events ---------- */
+$("thead").addEventListener("click",e=>{
+  if(e.target.closest("#clearChk")){ selected=[]; render(); return; }
+  const g=e.target.closest("[data-grp]"); if(g){ collapsed[g.getAttribute("data-grp")]=!collapsed[g.getAttribute("data-grp")]; render(); return; }
+  const th=e.target.closest("th.sortable"); if(th) setSort(th.getAttribute("data-col"));
+});
+/* drag-select: hold left button and drag across rows to multi-select / deselect */
+let dragging=false, dragMode=null, dragToasted=false;
+function trySelect(key,add){
+  const isSel=selected.includes(key);
+  if(add){ if(isSel) return; if(selected.length<3){ selected.push(key); } else if(!dragToasted){ toast("You can select up to 3 models to compare."); dragToasted=true; } }
+  else { if(isSel) selected=selected.filter(k=>k!==key); }
+}
+function refreshSelection(){
+  $("tbody").querySelectorAll("tr").forEach(tr=>{
+    const cb=tr.querySelector("input[type=checkbox]"); if(!cb) return;
+    const isSel=selected.includes(cb.getAttribute("data-key"));
+    cb.checked=isSel; tr.classList.toggle("sel",isSel);
+  });
+  $("count").textContent=lastCount+" variants"+(selected.length?(" · "+selected.length+"/3 selected"):"");
+}
+$("tbody").addEventListener("mousedown",e=>{
+  if(e.button!==0) return;
+  const tr=e.target.closest("tr"); if(!tr) return;
+  const cb=tr.querySelector("input[type=checkbox]"); if(!cb) return;
+  e.preventDefault();
+  const key=cb.getAttribute("data-key");
+  dragging=true; dragToasted=false; dragMode=selected.includes(key)?"remove":"add";
+  trySelect(key,dragMode==="add"); refreshSelection();
+});
+$("tbody").addEventListener("mouseover",e=>{
+  if(!dragging) return;
+  const tr=e.target.closest("tr"); if(!tr) return;
+  const cb=tr.querySelector("input[type=checkbox]"); if(!cb) return;
+  trySelect(cb.getAttribute("data-key"),dragMode==="add"); refreshSelection();
+});
+window.addEventListener("mouseup",()=>{ if(dragging){ dragging=false; dragMode=null; render(); } });
+$("loadBtn").addEventListener("click",()=>{ saveCfg(); loadFromApi(); });
+$("search").addEventListener("input",render);
+$("colVendor").addEventListener("change",e=>{ cols.vendor=e.target.checked; render(); });
+$("colProvider").addEventListener("change",e=>{ cols.provider=e.target.checked; render(); });
+$("baseUrl").addEventListener("input",saveCfg);
+
+/* comparison panel resize (drag splitter) */
+let cmpW=520;
+function applyCmpW(){ const c=$("cmp"); c.style.flexBasis=cmpW+"px"; c.style.width=cmpW+"px"; }
+function saveCmpW(){ try{ localStorage.setItem("rlmc_cmpw",String(cmpW)); }catch(e){} }
+function loadCmpW(){ try{ const v=parseInt(localStorage.getItem("rlmc_cmpw"),10); if(v) cmpW=v; }catch(e){} }
+(function(){
+  const sp=$("splitter"); if(!sp) return; let dragging=false;
+  sp.addEventListener("mousedown",e=>{ dragging=true; sp.classList.add("drag"); document.body.style.userSelect="none"; e.preventDefault(); });
+  window.addEventListener("mousemove",e=>{
+    if(!dragging) return;
+    const rect=document.querySelector(".layout").getBoundingClientRect();
+    let w=rect.right-e.clientX; w=Math.max(320, Math.min(w, rect.width-380));
+    cmpW=Math.round(w); applyCmpW(); updateTblScroll();
+  });
+  window.addEventListener("mouseup",()=>{ if(!dragging) return; dragging=false; sp.classList.remove("drag"); document.body.style.userSelect=""; saveCmpW(); if(selected.length) renderCompare(); updateTblScroll(); });
+})();
+
+/* dual horizontal scrollbar for the main table */
+function updateTblScroll(){
+  const wrap=document.querySelector(".tablewrap"), top=$("tblScrollTop"), tbl=$("tbl");
+  if(!wrap||!top||!tbl) return;
+  if(tbl.scrollWidth<=wrap.clientWidth+1){ top.style.display="none"; return; }
+  top.style.display="block"; top.firstElementChild.style.width=tbl.scrollWidth+"px";
+}
+(function(){
+  const top=$("tblScrollTop"), wrap=document.querySelector(".tablewrap"); if(!top||!wrap) return;
+  let lock=false;
+  top.addEventListener("scroll",()=>{ if(lock)return; lock=true; wrap.scrollLeft=top.scrollLeft; lock=false; });
+  wrap.addEventListener("scroll",()=>{ if(lock)return; lock=true; top.scrollLeft=wrap.scrollLeft; lock=false; });
+  window.addEventListener("resize",updateTblScroll);
+})();
+
+/* custom tooltip for tiered-pricing (*) — upper-right of cursor, offset so it never overlaps */
+(function(){
+  const tip=document.createElement("div"); tip.id="tip"; document.body.appendChild(tip);
+  const GAP=14;
+  function place(e){
+    const r=tip.getBoundingClientRect();
+    let x=e.clientX+GAP, y=e.clientY-GAP-r.height;
+    if(x+r.width>window.innerWidth-8) x=e.clientX-GAP-r.width;   // flip left near right edge
+    if(y<8) y=e.clientY+GAP;                                      // flip below near top edge
+    tip.style.left=x+"px"; tip.style.top=y+"px";
+  }
+  document.addEventListener("mouseover",e=>{
+    const t=e.target.closest(".tiered"); if(!t) return;
+    const txt=t.getAttribute("data-tip"); if(!txt) return;
+    tip.textContent=txt; tip.classList.add("show"); place(e);
+  });
+  document.addEventListener("mousemove",e=>{
+    if(!tip.classList.contains("show")) return;
+    if(!e.target.closest(".tiered")){ tip.classList.remove("show"); return; }
+    place(e);
+  });
+})();
+
+function saveCfg(){ try{ localStorage.setItem("rlmc_base",$("baseUrl").value); }catch(e){} }
+function loadCfg(){ try{ const b=localStorage.getItem("rlmc_base"); if(b)$("baseUrl").value=b; }catch(e){} }
+
+loadCfg(); loadCmpW(); applyCmpW(); render(); loadFromApi();
+</script>
+</body>
+</html>
