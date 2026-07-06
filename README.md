@@ -4,7 +4,7 @@ A single-file web app that compares and sorts RouterLink models using the `/api/
 
 ## How to run
 
-Double-click `RouterLink Model Selector.html` to open it in a browser (no server needed). On load, it automatically calls `GET {base}/v1/models/group` with the default **API Base URL** (`https://router-link.world3.ai/api`) and fills the table. If the API moves, just change the Base URL field at the top and click "Load models".
+Double-click `RouterLink-Model-Selector.html` to open it in a browser (no server needed). On load, it automatically calls `GET {base}/v1/models/group` with the default **API Base URL** (`https://router-link.world3.ai/api`) and fills the table. If the API moves, just change the Base URL field at the top and click "Load models".
 
 ## Features
 
